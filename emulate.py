@@ -19,6 +19,14 @@ except ImportError:
     print("Install them with: pip install pywin32 psutil")
     sys.exit(1)
 
+try:
+    from logidrivepy import LogitechController
+    LOGIDRIVE_AVAILABLE = True
+except ImportError:
+    print("Warning: logidrivepy library not installed")
+    print("Force feedback will not be available. Install it with: pip install logidrivepy")
+    LOGIDRIVE_AVAILABLE = False
+
 # Controller type selection
 USE_XBOX_CONTROLLER = True  # Set to False to use DS4 controller
 
@@ -212,6 +220,51 @@ def main():
     device_config = config['device']
     controls = config['controls']
     
+    # Load force feedback settings from config
+    ffb_config = config.get('force_feedback', {})
+    ENABLE_FORCE_FEEDBACK = ffb_config.get('enabled', True)
+    FFB_SPRING_STRENGTH = ffb_config.get('spring_strength', 80)
+    FFB_SPRING_COEFFICIENT = ffb_config.get('spring_coefficient', 50)
+    
+    # Load dirt road effect settings
+    dirt_road_config = ffb_config.get('dirt_road_effect', {})
+    DIRT_ROAD_ENABLED = dirt_road_config.get('enabled', True)
+    DIRT_ROAD_MAX_MAGNITUDE = dirt_road_config.get('max_magnitude', 60)
+    
+    # Load steering settings from config
+    steering_config = config.get('steering', {})
+    DEFAULT_STEERING_MULTIPLIER = steering_config.get('default_multiplier', 8)
+    MIN_STEERING_MULTIPLIER = steering_config.get('min_multiplier', 1)
+    MAX_STEERING_MULTIPLIER = steering_config.get('max_multiplier', 32)
+    
+    # Initialize Logitech force feedback controller if available
+    logi_controller = None
+    ffb_active = False
+    dirt_road_active = False
+    
+    if LOGIDRIVE_AVAILABLE and ENABLE_FORCE_FEEDBACK:
+        try:
+            logi_controller = LogitechController()
+            if logi_controller.steering_initialize():
+                print("Logitech force feedback controller initialized")
+                
+                # Check if wheel is connected and has force feedback
+                if logi_controller.is_connected(0):
+                    if logi_controller.has_force_feedback(0):
+                        print(f"Force feedback available - centering spring enabled (strength: {FFB_SPRING_STRENGTH}%, coefficient: {FFB_SPRING_COEFFICIENT}%)")
+                    else:
+                        print("Warning: Wheel connected but no force feedback capability detected")
+                        logi_controller = None
+                else:
+                    print("Warning: No Logitech wheel detected for force feedback")
+                    logi_controller = None
+            else:
+                print("Warning: Failed to initialize Logitech controller for force feedback")
+                logi_controller = None
+        except Exception as e:
+            print(f"Warning: Error initializing force feedback: {e}")
+            logi_controller = None
+    
     VENDOR_ID = device_config['vendor_id']
     PRODUCT_ID = device_config['product_id']
     INTERFACE = device_config['interface']
@@ -284,14 +337,18 @@ def main():
     is_native_game = False  # Track if current app is a native wheel game
     
     # Steering multiplier settings (adjustable with +/- buttons)
-    steering_multiplier = 8  # Default multiplier
-    MIN_MULTIPLIER = 1
-    MAX_MULTIPLIER = 32
+    steering_multiplier = DEFAULT_STEERING_MULTIPLIER
+    MIN_MULTIPLIER = MIN_STEERING_MULTIPLIER
+    MAX_MULTIPLIER = MAX_STEERING_MULTIPLIER
     
     try:
         update_count = 0
         
         while True:
+            # Update force feedback every frame
+            if logi_controller:
+                logi_controller.logi_update()
+            
             # Check foreground application periodically
             app_check_counter += 1
             if app_check_counter >= APP_CHECK_INTERVAL:
@@ -312,6 +369,24 @@ def main():
                         print(f"  STATUS: Full emulation mode - all inputs will be emulated")
                     print(f"{'='*60}\n")
                     last_foreground_app = current_app
+                    
+                    # Manage force feedback based on game type
+                    if logi_controller:
+                        if is_native_game:
+                            # Stop force feedback for native games (they handle it themselves)
+                            if ffb_active:
+                                logi_controller.stop_spring_force(0)
+                                ffb_active = False
+                                print("[FORCE FEEDBACK] Disabled for native wheel game")
+                            if dirt_road_active:
+                                logi_controller.stop_dirt_road_effect(0)
+                                dirt_road_active = False
+                        else:
+                            # Enable centering spring for emulated games
+                            if not ffb_active:
+                                if logi_controller.play_spring_force(0, 0, FFB_SPRING_STRENGTH, FFB_SPRING_COEFFICIENT):
+                                    ffb_active = True
+                                    print("[FORCE FEEDBACK] Centering spring enabled")
             
             data = h.read(64)
             if data:
@@ -385,6 +460,20 @@ def main():
                             gamepad.right_trigger(value=throttle_value)
                             last_throttle_value = throttle_value
                             trigger_updated = True
+                            
+                            # Update dirt road effect based on throttle (force feedback)
+                            if logi_controller and DIRT_ROAD_ENABLED and not is_native_game:
+                                if throttle_value > 0:
+                                    # Calculate dirt road magnitude proportional to throttle (0-255 -> 0-max_magnitude)
+                                    dirt_magnitude = int((throttle_value / 255.0) * DIRT_ROAD_MAX_MAGNITUDE)
+                                    if logi_controller.play_dirt_road_effect(0, dirt_magnitude):
+                                        if not dirt_road_active:
+                                            dirt_road_active = True
+                                else:
+                                    # Stop dirt road effect when throttle released
+                                    if dirt_road_active:
+                                        logi_controller.stop_dirt_road_effect(0)
+                                        dirt_road_active = False
                     
                     if brake_control:
                         brake_value = parse_analog_value(brake_control, data)
@@ -473,6 +562,16 @@ def main():
     
     except KeyboardInterrupt:
         print("\n\nStopping gamepad emulation...")
+    
+    # Clean up force feedback
+    if logi_controller:
+        print("Stopping force feedback...")
+        if ffb_active:
+            logi_controller.stop_spring_force(0)
+        if dirt_road_active:
+            logi_controller.stop_dirt_road_effect(0)
+        logi_controller.steering_shutdown()
+        print("Force feedback controller shut down")
     
     # Clean up
     print("Releasing all buttons...")

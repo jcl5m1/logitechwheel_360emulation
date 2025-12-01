@@ -5,6 +5,20 @@
     "product_id": 49766,
     "interface": 3
   },
+  "force_feedback": {
+    "enabled": true,
+    "spring_strength": 100,
+    "spring_coefficient": 100,
+    "dirt_road_effect": {
+      "enabled": true,
+      "max_magnitude": 60
+    }
+  },
+  "steering": {
+    "default_multiplier": 8,
+    "min_multiplier": 1,
+    "max_multiplier": 32
+  },
   "controls": {
     "steering": {
       "type": "analog_16bit",
