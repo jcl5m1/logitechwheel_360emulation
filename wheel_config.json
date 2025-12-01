@@ -1,0 +1,163 @@
+{
+  "device": {
+    "name": "Logitech G923 Racing Wheel",
+    "vendor_id": 1133,
+    "product_id": 49766,
+    "interface": 3
+  },
+  "controls": {
+    "steering": {
+      "type": "analog_16bit",
+      "byte_lsb": 4,
+      "byte_msb": 5,
+      "min": 0,
+      "max": 65535,
+      "neutral": 31580
+    },
+    "throttle": {
+      "type": "analog",
+      "byte": 6,
+      "min": 0,
+      "max": 255,
+      "neutral": 255
+    },
+    "brake": {
+      "type": "analog",
+      "byte": 7,
+      "min": 0,
+      "max": 255,
+      "neutral": 255
+    },
+    "clutch": {
+      "type": "analog",
+      "byte": 8,
+      "min": 0,
+      "max": 255,
+      "neutral": 255
+    },
+    "dpad": {
+      "type": "dpad_lut",
+      "byte": 0,
+      "mask": 15,
+      "lut": {
+        "0": "up",
+        "1": "up-right",
+        "2": "right",
+        "3": "down-right",
+        "4": "down",
+        "5": "down-left",
+        "6": "left",
+        "7": "up-left",
+        "8": "none"
+      }
+    },
+    "square": {
+      "type": "button",
+      "byte": 0,
+      "bit": 5,
+      "active_value": 1
+    },
+    "triangle": {
+      "type": "button",
+      "byte": 0,
+      "bit": 7,
+      "active_value": 1
+    },
+    "circle": {
+      "type": "button",
+      "byte": 0,
+      "bit": 6,
+      "active_value": 1
+    },
+    "cross": {
+      "type": "button",
+      "byte": 0,
+      "bit": 4,
+      "active_value": 1
+    },
+    "paddleLeft": {
+      "type": "button",
+      "byte": 1,
+      "bit": 1,
+      "active_value": 1
+    },
+    "paddleRight": {
+      "type": "button",
+      "byte": 1,
+      "bit": 0,
+      "active_value": 1
+    },
+    "L2": {
+      "type": "button",
+      "byte": 1,
+      "bit": 3,
+      "active_value": 1
+    },
+    "L3": {
+      "type": "button",
+      "byte": 1,
+      "bit": 7,
+      "active_value": 1
+    },
+    "R2": {
+      "type": "button",
+      "byte": 1,
+      "bit": 2,
+      "active_value": 1
+    },
+    "R3": {
+      "type": "button",
+      "byte": 1,
+      "bit": 6,
+      "active_value": 1
+    },
+    "plus": {
+      "type": "button",
+      "byte": 2,
+      "bit": 7,
+      "active_value": 1
+    },
+    "minus": {
+      "type": "button",
+      "byte": 3,
+      "bit": 0,
+      "active_value": 1
+    },
+    "scrollRight": {
+      "type": "button",
+      "byte": 3,
+      "bit": 1,
+      "active_value": 1
+    },
+    "scrollLeft": {
+      "type": "button",
+      "byte": 3,
+      "bit": 2,
+      "active_value": 1
+    },
+    "enter": {
+      "type": "button",
+      "byte": 3,
+      "bit": 3,
+      "active_value": 1
+    },
+    "share": {
+      "type": "button",
+      "byte": 1,
+      "bit": 4,
+      "active_value": 1
+    },
+    "option": {
+      "type": "button",
+      "byte": 1,
+      "bit": 5,
+      "active_value": 1
+    },
+    "PS": {
+      "type": "button",
+      "byte": 3,
+      "bit": 4,
+      "active_value": 1
+    }
+  }
+}
