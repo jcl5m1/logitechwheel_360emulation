@@ -23,6 +23,7 @@ except ImportError:
 USE_XBOX_CONTROLLER = True  # Set to False to use DS4 controller
 
 CONFIG_FILE = 'wheel_config.json'
+NATIVE_GAMES_FILE = 'native_wheel_games.json'
 
 def load_config(filename):
     """Load wheel configuration from JSON file."""
@@ -35,6 +36,36 @@ def load_config(filename):
     except json.JSONDecodeError as e:
         print(f"Error: Invalid JSON in '{filename}': {e}")
         sys.exit(1)
+
+def load_native_games(filename):
+    """Load list of games that natively support Logitech wheels."""
+    try:
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            # Convert to lowercase for case-insensitive matching
+            return [game.lower() for game in data.get('games', [])]
+    except FileNotFoundError:
+        print(f"Warning: Native games file '{filename}' not found")
+        print("All inputs will be emulated for all games.")
+        return []
+    except json.JSONDecodeError as e:
+        print(f"Warning: Invalid JSON in '{filename}': {e}")
+        print("All inputs will be emulated for all games.")
+        return []
+
+def is_native_wheel_game(app_name, native_games_list):
+    """Check if the given application is a native wheel game using case-insensitive substring matching."""
+    if not app_name:
+        return False
+    
+    app_name_lower = app_name.lower()
+    
+    # Check if any game name is a substring of the app name (case-insensitive)
+    for game in native_games_list:
+        if game in app_name_lower:
+            return True
+    
+    return False
 
 def parse_button_value(control_config, data):
     """Parse a button value from HID data based on its configuration."""
@@ -173,6 +204,11 @@ def main():
     print(f"Loading configuration from {CONFIG_FILE}...")
     config = load_config(CONFIG_FILE)
     
+    # Load native games list
+    print(f"Loading native wheel games from {NATIVE_GAMES_FILE}...")
+    native_games = load_native_games(NATIVE_GAMES_FILE)
+    print(f"Loaded {len(native_games)} native wheel games")
+    
     device_config = config['device']
     controls = config['controls']
     
@@ -245,6 +281,12 @@ def main():
     last_foreground_app = None
     app_check_counter = 0
     APP_CHECK_INTERVAL = 100  # Check every 100 iterations
+    is_native_game = False  # Track if current app is a native wheel game
+    
+    # Steering multiplier settings (adjustable with +/- buttons)
+    steering_multiplier = 8  # Default multiplier
+    MIN_MULTIPLIER = 1
+    MAX_MULTIPLIER = 32
     
     try:
         update_count = 0
@@ -257,11 +299,17 @@ def main():
                 current_app = get_foreground_application()
                 
                 if last_foreground_app is None or current_app['name'] != last_foreground_app['name']:
+                    is_native_game = is_native_wheel_game(current_app['name'], native_games)
+                    
                     print(f"\n{'='*60}")
                     print(f"[FOREGROUND APP CHANGED]")
                     print(f"  Application: {current_app['name']}")
                     print(f"  Window Title: {current_app['title']}")
                     print(f"  PID: {current_app['pid']}")
+                    if is_native_game:
+                        print(f"  STATUS: Native wheel support detected - only guide button will be emulated")
+                    else:
+                        print(f"  STATUS: Full emulation mode - all inputs will be emulated")
                     print(f"{'='*60}\n")
                     last_foreground_app = current_app
             
@@ -290,11 +338,12 @@ def main():
                 # Store current data for next comparison
                 last_data = data.copy()
                 
-                # Parse steering MSB (byte 5) and map to left joystick X-axis with 5x sensitivity
-                if USE_XBOX_CONTROLLER and len(data) > 5:
-                    # Apply 5x sensitivity: Map 0-255 to -32768 to 32767 with 5x multiplier
+                # Parse steering MSB (byte 5) and map to left joystick X-axis with adjustable sensitivity
+                # Skip steering emulation if native wheel game is running
+                if not is_native_game and USE_XBOX_CONTROLLER and len(data) > 5:
+                    # Apply steering multiplier: Map 0-255 to -32768 to 32767 with multiplier
                     # Center at 128: 0→-32768, 128→0, 255→32767
-                    joystick_raw = (steering_msb - 128) * 5 * (32767 / 127)
+                    joystick_raw = (steering_msb - 128) * steering_multiplier * (32767 / 127)
                     
                     # Clamp to prevent wrap-around
                     joystick_x = int(max(-32768, min(32767, joystick_raw)))
@@ -303,6 +352,7 @@ def main():
                     
                     # Send update if steering changed
                     if steering_changed:
+                        print(f"[STEERING] MSB: {steering_msb}, Multiplier: {steering_multiplier}x, Sent: {joystick_x}")
                         gamepad.update()
                 
                 # Create current state dictionary
@@ -326,8 +376,9 @@ def main():
                     current_states[name] = parse_button_value(ctrl_config, data)
                 
                 # Parse analog triggers (Xbox only)
+                # Skip trigger emulation if native wheel game is running
                 trigger_updated = False
-                if USE_XBOX_CONTROLLER:
+                if not is_native_game and USE_XBOX_CONTROLLER:
                     if throttle_control:
                         throttle_value = parse_analog_value(throttle_control, data)
                         if throttle_value != last_throttle_value:
@@ -347,10 +398,40 @@ def main():
                         gamepad.update()
                 
                 # Process all button state changes (unified handling)
+                # Always allow guide button (PS), skip all others if native wheel game is running
                 for name, new_state in current_states.items():
                     old_state = last_button_states.get(name, False)
                     
+                    # Handle plus/minus buttons for steering multiplier adjustment
+                    if name == 'minus' or name == 'plus':
+                        if new_state != old_state:  # Button state changed
+                            if new_state:  # Button just pressed
+                                if name == 'minus':
+                                    # Decrease multiplier (divide by 2)
+                                    new_multiplier = steering_multiplier // 2
+                                    if new_multiplier >= MIN_MULTIPLIER:
+                                        steering_multiplier = new_multiplier
+                                        print(f"\n[STEERING] Multiplier decreased to {steering_multiplier}x\n")
+                                    else:
+                                        print(f"\n[STEERING] Multiplier already at minimum ({MIN_MULTIPLIER}x)\n")
+                                elif name == 'plus':
+                                    # Increase multiplier (multiply by 2)
+                                    new_multiplier = steering_multiplier * 2
+                                    if new_multiplier <= MAX_MULTIPLIER:
+                                        steering_multiplier = new_multiplier
+                                        print(f"\n[STEERING] Multiplier increased to {steering_multiplier}x\n")
+                                    else:
+                                        print(f"\n[STEERING] Multiplier already at maximum ({MAX_MULTIPLIER}x)\n")
+                            last_button_states[name] = new_state
+                        continue
+                    
+                    # Always process guide button, skip others for native games
                     if new_state != old_state and name in BUTTON_MAP:
+                        # Skip all buttons except guide button for native wheel games
+                        if is_native_game and name != 'PS':
+                            last_button_states[name] = new_state
+                            continue
+                        
                         gamepad_button = BUTTON_MAP[name]
                         
                         if new_state:
