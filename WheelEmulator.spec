@@ -1,12 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+datas = [('wheel_config.json', '.')]
+binaries = []
+hiddenimports = []
+tmp_ret = collect_all('vgamepad')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('logidrivepy')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['emulate.py'],
     pathex=[],
-    binaries=[('C:\\Users\\ArcadeProfile\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\vgamepad\\win\\vigem\\client\\x64\\ViGEmClient.dll', 'vgamepad\\win\\vigem\\client\\x64'), ('C:\\Users\\ArcadeProfile\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\site-packages\\vgamepad\\win\\vigem\\client\\x86\\ViGEmClient.dll', 'vgamepad\\win\\vigem\\client\\x86')],
-    datas=[('wheel_config.json', '.')],
-    hiddenimports=[],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

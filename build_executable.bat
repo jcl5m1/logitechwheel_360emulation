@@ -23,18 +23,15 @@ if errorlevel 1 (
     )
 )
 
-REM Check if PyInstaller is installed
-python -c "import PyInstaller" 2>nul
-if errorlevel 1 (
-    echo PyInstaller not found. Installing...
-    python -m pip install pyinstaller
-    echo.
-)
+REM Install required dependencies
+echo Installing required dependencies...
+python -m pip install hidapi vgamepad pywin32 psutil logidrivepy pyinstaller
+echo.
 
 echo Building executable...
 echo.
 
-python -m PyInstaller --onefile --add-data "wheel_config.json;." --console --name "WheelEmulator" --clean emulate.py
+python -m PyInstaller --onefile --add-data "wheel_config.json;." --collect-all vgamepad --collect-all logidrivepy --console --name "WheelEmulator" --clean emulate.py
 
 echo.
 echo ========================================
